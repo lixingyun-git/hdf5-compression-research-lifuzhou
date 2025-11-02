@@ -5,7 +5,7 @@ hdf5 research
 
 apt update
 
-apt install cmake libzstd_dev install zlib1g-dev
+apt install libzstd_dev zlib1g-dev cmake
 
 pip install conan==1.60
 
@@ -42,3 +42,10 @@ make -j8
 main.cpp
 
 Makefile
+
+
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/hdf5-hdf5_1.14.6/hdf5/lib
+
+export HDF5_PLUGIN_PATH=/root/vbz_compression/build/bin
+
+./main hdf5-compression-bench/PBG08621_pass_6c7986d6_167483a9_0.hdf5 
