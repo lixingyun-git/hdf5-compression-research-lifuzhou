@@ -9,7 +9,33 @@
 #include <cstring>
 #include <cmath>
 #include <iomanip>
-#include <H5Cpp.h>
+#include <gflags/gflags.h>
+#include <filesystem>
+#include <sys/stat.h>
+
+namespace fs = std::filesystem;
+
+// 通过stat结构体获得文件大小，单位字节
+size_t getFileSize(const std::string &fileName) {
+    if (fileName.empty()) {
+        return 0;
+    }
+    // 这是一个存储文件(夹)信息的结构体，其中有文件大小和创建时间、访问时间、修改时间等
+    struct stat statbuf;
+    // 提供文件名字符串，获得文件属性结构体
+    stat(fileName.c_str(), &statbuf);
+    // 获取文件大小
+    size_t filesize = statbuf.st_size;
+    return filesize;
+}
+
+DEFINE_string(source_file, "source_file.h5", "源文件");
+DEFINE_string(dest_file, "dest_file.h5", "压缩后内容保存文件");
+DEFINE_string(filter, "GZIP", "GZIP LZ4 NO等");
+DEFINE_int32(compress_level, 6, "压缩等级");
+DEFINE_bool(verbose, false, "是否输出详细信息");
+
+#define H5Z_FILTER_LZ4 32004 
 
 class HDF5CompressionModifier {
 private:
@@ -17,7 +43,6 @@ private:
     std::string output_filename;
     hid_t input_file_id = H5I_INVALID_HID;
     hid_t output_file_id = H5I_INVALID_HID;
-    //H5::H5File output_file;
 
     int is_group_exists(hid_t file_id, const std::string &group_path) {
         // 调用 H5Lexists 检查链接是否存在
@@ -38,8 +63,10 @@ private:
 
         if (group_id < 0) {
             fprintf(stderr, "创建组失败：%s\n", group_path.c_str());
+	    exit(-1);
         } else {
-            printf("创建组成功：%s\n", group_path.c_str());
+	    if (FLAGS_verbose)
+                printf("创建组成功：%s\n", group_path.c_str());
         }
         return group_id;
     }
@@ -51,7 +78,8 @@ private:
         if (group_id < 0) {
             fprintf(stderr, "打开组失败：%s\n", group_path.c_str());
         } else {
-            printf("打开组成功：%s（组 ID：%d）\n", group_path.c_str(), (int)group_id);
+	    if (FLAGS_verbose)
+            	printf("打开组成功：%s（组 ID：%d）\n", group_path.c_str(), (int)group_id);
         }
         return group_id;
     }
@@ -78,7 +106,8 @@ private:
         if (dset_id < 0) {
             fprintf(stderr, "在组中创建数据集失败：%s\n", dset_name);
         } else {
-            printf("在组中创建数据集成功：%s（数据集 ID：%d）\n", dset_name, (int)dset_id);
+	    if (FLAGS_verbose)
+            	printf("在组中创建数据集成功：%s（数据集 ID：%d）\n", dset_name, (int)dset_id);
         }
         return dset_id;
     }
@@ -142,7 +171,7 @@ public:
         std::vector<std::string> objectList;
         
         herr_t status = H5Ovisit(input_file_id, H5_INDEX_NAME, H5_ITER_NATIVE, 
-                          visitCallback, &objectList, H5O_INFO_ALL);
+                          visitCallback, &objectList);
         
         if (status < 0) {
             std::cerr << "遍历HDF5文件结构失败" << std::endl;
@@ -164,24 +193,20 @@ public:
                 throw std::runtime_error("read_hdf5_data 无法打开数据集: " + dataset_path);
             }
             
-            std::cout << "step 1" << std::endl;
             // 获取数据空间
             dataspace_id = H5Dget_space(dataset_id);
             data_rank = H5Sget_simple_extent_ndims(dataspace_id);
             
-            std::cout << "step 2" << std::endl;
             // 获取数据维度
             std::vector<hsize_t> dims(data_rank);
             H5Sget_simple_extent_dims(dataspace_id, dims.data(), NULL);
             
-            std::cout << "step 3" << std::endl;
             // 计算总数据大小
             data_size = 1;
             for (int i = 0; i < data_rank; ++i) {
                 data_size *= dims[i];
             }
             
-            std::cout << "step 4" << std::endl;
             // 读取数据
             data.resize(data_size);
             herr_t status = H5Dread(dataset_id, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.data());
@@ -189,21 +214,20 @@ public:
                 throw std::runtime_error("读取数据失败");
             }
             
-            std::cout << "step 5" << std::endl;
             // 获取原始压缩信息
             hid_t orig_plist = H5Dget_create_plist(dataset_id);
             int num_filters = H5Pget_nfilters(orig_plist);
             
-            std::cout << "成功读取数据集: " << dataset_path << std::endl;
-            std::cout << "数据维度: " << data_rank << "D, 大小: " << data_size << " 个元素" << std::endl;
-            std::cout << "原始压缩过滤器数量: " << num_filters << std::endl;
-            
+	    if (FLAGS_verbose) {
+            	std::cout << "成功读取数据集: " << dataset_path << std::endl;
+            	std::cout << "数据维度: " << data_rank << "D, 大小: " << data_size << " 个元素" << std::endl;
+            	std::cout << "原始压缩过滤器数量: " << num_filters << std::endl;
+	    }
             // 清理资源
             H5Pclose(orig_plist);
             H5Sclose(dataspace_id);
             H5Dclose(dataset_id);
             
-            std::cout << "step 6" << std::endl;
             return true;
             
         } catch (const std::exception& e) {
@@ -272,7 +296,7 @@ public:
                 }
                 H5Pset_deflate(plist_id, compression_level);
                 
-            } /*else if (compression_type == "LZ4") {
+            } else if (compression_type == "LZ4") {
                 unsigned int filter_info;
                 if (H5Zfilter_avail(H5Z_FILTER_LZ4)) {
                     H5Zget_filter_info(H5Z_FILTER_LZ4, &filter_info);
@@ -280,7 +304,7 @@ public:
                         H5Pset_filter(plist_id, H5Z_FILTER_LZ4, H5Z_FLAG_OPTIONAL, 0, NULL);
                     } else {
                         std::cerr << "警告: LZ4过滤器不可用，使用GZIP替代" << std::endl;
-                        H5Pset_deflate(plist_id, 6);
+                        H5Pset_deflate(plist_id, compression_level);
                     }
                 } else {
                     std::cerr << "警告: LZ4过滤器不可用，使用GZIP替代" << std::endl;
@@ -322,25 +346,24 @@ public:
                     H5Pset_deflate(plist_id, 6);
                 }
                 
+            } */else if (compression_type == "NO") {
+		    if (FLAGS_verbose)
+		    	std::cout << "不压缩: " << compression_type << std::endl;
             } else {
                 throw std::runtime_error("不支持的压缩类型: " + compression_type);
-            }*/
+	    }
             
             // 创建数据集
-            std::string dataset_name = "modified_data";
-            dataset_name = dataset_path;
-            std::cout << "create dataset:" << dataset_name << std::endl;
+            std::string dataset_name = dataset_path;
+	    if (FLAGS_verbose)
+                std::cout << "create dataset:" << dataset_name << std::endl;
             std::string group_path;
             std::string dataset_file;
             create_path(dataset_path, group_path, dataset_file);
             dataset_name = dataset_file;
-            //H5::Group group = output_file.openGroup(group_path);
             auto group_id = open_group(output_file_id, group_path);
 
 
-            //dataset_id = H5Dcreate2(output_file_id, dataset_name.c_str(), H5T_NATIVE_FLOAT,
-            //dataset_id = H5Dcreate2(group_id, dataset_name.c_str(), H5T_NATIVE_INT,
-            //                          dataspace_id, H5P_DEFAULT, plist_id, H5P_DEFAULT);
             dataset_id = create_dataset_in_group(group_id, dataset_name.c_str(), H5T_NATIVE_INT, dataspace_id, plist_id);
             if (dataset_id < 0) {
                 throw std::runtime_error("无法创建数据集");
@@ -358,10 +381,8 @@ public:
             double original_size = data.size() * sizeof(float);
             double compression_ratio = (1.0 - static_cast<double>(storage_size) / original_size) * 100.0;
             
-            std::cout << "新压缩算法: " << compression_type << std::endl;
-            std::cout << "压缩级别: " << compression_level << std::endl;
-            std::cout << "压缩比率: " << std::fixed << std::setprecision(2) 
-                      << compression_ratio << "%" << std::endl;
+	    if (FLAGS_verbose)
+            	std::cout << "压缩比率: " << std::fixed << std::setprecision(2) << compression_ratio << "%" << std::endl;
             
             // 清理资源
             //H5Dclose(dataset_id);
@@ -387,10 +408,8 @@ public:
         hsize_t data_size;
         int data_rank;
         
-        std::cout << "开始处理HDF5文件压缩算法修改..." << std::endl;
-        std::cout << "输入文件: " << input_filename << std::endl;
-        std::cout << "数据集路径: " << dataset_path << std::endl;
-        std::cout << "新压缩算法: " << new_compression_type << std::endl;
+	if (FLAGS_verbose)
+            std::cout << "数据集路径: " << dataset_path << std::endl;
         
         // 读取现有数据
         if (!read_hdf5_data(dataset_path, data, data_size, data_rank)) {
@@ -409,17 +428,17 @@ public:
     void batch_modify_compression(const std::vector<std::string>& dataset_paths,
                                 const std::string& new_compression_type,
                                 int new_compression_level = 6) {
-        std::cout << "=== HDF5批量压缩算法修改 ===" << std::endl;
-        
         for (size_t i = 0; i < dataset_paths.size(); ++i) {
-            std::cout << "\n处理数据集 " << (i+1) << "/" << dataset_paths.size() << std::endl;
+	    if (FLAGS_verbose)
+            	std::cout << "\n处理数据集 " << (i+1) << "/" << dataset_paths.size() << std::endl;
             
             bool success = modify_compression_algorithm(dataset_paths[i],
                                                         new_compression_type,
                                                         new_compression_level);
             
             if (success) {
-                std::cout << "✓ 数据集 " << dataset_paths[i] << " 修改成功" << std::endl;
+	    	if (FLAGS_verbose)
+                    std::cout << "✓ 数据集 " << dataset_paths[i] << " 修改成功" << std::endl;
             } else {
                 std::cout << "✗ 数据集 " << dataset_paths[i] << " 修改失败" << std::endl;
             }
@@ -429,33 +448,32 @@ public:
 
 int main(int argc, char* argv[]) {
     try {
+	gflags::ParseCommandLineFlags(&argc, &argv, true);
+
+	if (fs::exists(FLAGS_dest_file)) {
+		std::cerr << "\n压缩后内容保存文件不能是已存在的文件 "<< FLAGS_dest_file << std::endl;
+		return 0;
+	}
+
+	std::cout << "源文件 " << FLAGS_source_file << std::endl;
+	std::cout << "压缩后内容保存文件 " << FLAGS_dest_file << std::endl;
+	std::cout << "filter " << FLAGS_filter << std::endl;
+
         std::cout << "HDF5压缩算法修改工具启动..." << std::endl;
         
-        // 默认输入文件
-        std::string input_file = "test_compression.h5";
-        std::string output_file = "test_compression_output.h5";
+	auto m_start = std::chrono::steady_clock::now();
         
-        // 如果命令行参数指定了输入文件
-        if (argc > 1) {
-            input_file = argv[1];
-        }
-        if (argc > 2) {
-            output_file = argv[2];
-        }
-        
+
         // 创建修改器实例
-        HDF5CompressionModifier modifier(input_file, output_file);
+        HDF5CompressionModifier modifier(FLAGS_source_file, FLAGS_dest_file);
 
         modifier.openFile();
-        
-        // 批量修改多个数据集的压缩算法
-        std::cout << "\n--- 批量压缩算法修改 ---" << std::endl;
         
         std::vector<std::string> datasets;
         auto objects = modifier.exploreFileStructure();
         datasets.reserve(objects.size());
 
-        int limit = 5;
+        int limit = 5;  //用于少量数据调试
         for (const auto& obj : objects) {
             //if (datasets.size() >= limit) break;
             if (obj.find("(Dataset)") != std::string::npos) {
@@ -467,14 +485,17 @@ int main(int argc, char* argv[]) {
         
         modifier.batch_modify_compression(
             datasets,
-            "GZIP",
-            6
+            FLAGS_filter,
+            FLAGS_compress_level
         );
 
         modifier.closeFile();
+	auto m_end = std::chrono::steady_clock::now();
+	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(m_end - m_start);
+	std::cout << "filter " << FLAGS_filter << "compress_level_"<< FLAGS_compress_level << 
+		" cost " << duration.count() << "ms" << " file_size:" << getFileSize(FLAGS_dest_file)/1024 << "K" << std::endl;
         
         std::cout << "\n=== 所有压缩算法修改任务完成 ===" << std::endl;
-        std::cout << "输出文件已保存到当前目录" << std::endl;
         
     } catch (const std::exception& e) {
         std::cerr << "程序执行失败: " << e.what() << std::endl;
