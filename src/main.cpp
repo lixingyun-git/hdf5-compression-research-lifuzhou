@@ -36,6 +36,9 @@ DEFINE_int32(compress_level, 6, "压缩等级");
 DEFINE_bool(verbose, false, "是否输出详细信息");
 
 #define H5Z_FILTER_LZ4 32004 
+#define H5Z_FILTER_ZSTD 32015
+#define H5Z_FILTER_BLOSC 32001
+#define H5Z_FILTER_VBZ 32020
 
 class HDF5CompressionModifier {
 private:
@@ -262,7 +265,7 @@ public:
                                    const std::vector<int>& data,
                                    const std::vector<hsize_t>& dims,
                                    const std::string& compression_type,
-                                   int compression_level = 6) {
+                                   unsigned int compression_level = 6) {
         hid_t dataset_id = H5I_INVALID_HID;
         hid_t dataspace_id = H5I_INVALID_HID;
         hid_t plist_id = H5I_INVALID_HID;
@@ -311,7 +314,7 @@ public:
                     H5Pset_deflate(plist_id, 6);
                 }
                 
-            } /*else if (compression_type == "ZSTD") {
+            } else if (compression_type == "ZSTD") {
                 unsigned int filter_info;
                 if (H5Zfilter_avail(H5Z_FILTER_ZSTD)) {
                     H5Zget_filter_info(H5Z_FILTER_ZSTD, &filter_info);
@@ -331,22 +334,43 @@ public:
                 if (H5Zfilter_avail(H5Z_FILTER_BLOSC)) {
                     H5Zget_filter_info(H5Z_FILTER_BLOSC, &filter_info);
                     if (filter_info & H5Z_FILTER_CONFIG_ENCODE_ENABLED) {
-                    unsigned int cd_values[7] = {0};
-                    cd_values[0] = 1;  // BloscLZ压缩器
-                    cd_values[1] = compression_level;
-                    cd_values[2] = 1;  // shuffle过滤器
-                    cd_values[3] = sizeof(float); // 数据类型大小
-                    H5Pset_filter(plist_id, H5Z_FILTER_BLOSC, H5Z_FLAG_OPTIONAL, 7, cd_values);
+                        unsigned int cd_values[7] = {0};
+                        cd_values[0] = 1;  // BloscLZ压缩器
+                        cd_values[1] = compression_level;
+                        cd_values[2] = 1;  // shuffle过滤器
+                        cd_values[3] = sizeof(float); // 数据类型大小
+                        H5Pset_filter(plist_id, H5Z_FILTER_BLOSC, H5Z_FLAG_OPTIONAL, 7, cd_values);
+                    } else {
+                        std::cerr << "警告: Blosc过滤器不可用，使用GZIP替代" << std::endl;
+                        H5Pset_deflate(plist_id, 6);
+		    }
                 } else {
                     std::cerr << "警告: Blosc过滤器不可用，使用GZIP替代" << std::endl;
                     H5Pset_deflate(plist_id, 6);
                 }
+	    } else if (compression_type == "VBZ") {
+                unsigned int filter_info;
+                if (H5Zfilter_avail(H5Z_FILTER_VBZ)) {
+                    H5Zget_filter_info(H5Z_FILTER_VBZ, &filter_info);
+                    if (filter_info & H5Z_FILTER_CONFIG_ENCODE_ENABLED) {
+                        H5Pset_filter(plist_id, H5Z_FILTER_VBZ, H5Z_FLAG_OPTIONAL, 1, &compression_level);
+                        std::cout << "step 1" << std::endl;
+		        // 启用VBZ压缩（压缩级别可根据需求调整1-9）
+		        if (H5Pset_deflate(plist_id, compression_level) < 0) { // 注意：VBZ插件复用了deflate的接口参数
+                           throw std::runtime_error("无法设置VBZ压缩: " + compression_type);
+		        }
+
+                        std::cout << "step 2" << std::endl;
+		       // 强制指定压缩过滤器为VBZ（关键步骤）
+		       if (H5Pset_filter(plist_id, H5Z_FILTER_VBZ, H5Z_FLAG_MANDATORY, 0, nullptr) < 0) {
+		           std::cerr << "无法设置VBZ过滤器" << std::endl;
+		       }
+		    }
                 } else {
-                    std::cerr << "警告: Blosc过滤器不可用，使用GZIP替代" << std::endl;
-                    H5Pset_deflate(plist_id, 6);
+                    std::cerr << "警告: VBZ过滤器不可用，使用GZIP替代" << std::endl;
+                    H5Pset_deflate(plist_id, compression_level);
                 }
-                
-            } */else if (compression_type == "NO") {
+            } else if (compression_type == "NO") {
 		    if (FLAGS_verbose)
 		    	std::cout << "不压缩: " << compression_type << std::endl;
             } else {
@@ -363,20 +387,24 @@ public:
             dataset_name = dataset_file;
             auto group_id = open_group(output_file_id, group_path);
 
+            std::cout << "step 3" << std::endl;
 
             dataset_id = create_dataset_in_group(group_id, dataset_name.c_str(), H5T_NATIVE_INT, dataspace_id, plist_id);
             if (dataset_id < 0) {
                 throw std::runtime_error("无法创建数据集");
             }
         
+            std::cout << "step 4" << std::endl;
             // 写入数据
-            herr_t write_status = H5Dwrite(dataset_id, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.data());
+            herr_t write_status = H5Dwrite(dataset_id, H5T_NATIVE_INT, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.data());
             if (write_status < 0) {
                 throw std::runtime_error("写入数据失败");
             }
             
+            std::cout << "step 5" << std::endl;
             // 获取压缩统计信息
             hsize_t storage_size = H5Dget_storage_size(dataset_id);
+            std::cout << "step 6" << std::endl;
 
             double original_size = data.size() * sizeof(float);
             double compression_ratio = (1.0 - static_cast<double>(storage_size) / original_size) * 100.0;
@@ -385,9 +413,12 @@ public:
             	std::cout << "压缩比率: " << std::fixed << std::setprecision(2) << compression_ratio << "%" << std::endl;
             
             // 清理资源
-            //H5Dclose(dataset_id);
+            H5Dclose(dataset_id);
+            std::cout << "step 7" << std::endl;
             H5Sclose(dataspace_id);
+            std::cout << "step 8" << std::endl;
             H5Pclose(plist_id);
+            std::cout << "step 9" << std::endl;
             
             return true;
             
@@ -473,9 +504,9 @@ int main(int argc, char* argv[]) {
         auto objects = modifier.exploreFileStructure();
         datasets.reserve(objects.size());
 
-        int limit = 5;  //用于少量数据调试
+        int limit = 1;  //用于少量数据调试
         for (const auto& obj : objects) {
-            //if (datasets.size() >= limit) break;
+            if (datasets.size() >= limit) break;
             if (obj.find("(Dataset)") != std::string::npos) {
                 size_t pos = obj.find(" (Dataset)");
                 std::string datasetName = obj.substr(0, pos);

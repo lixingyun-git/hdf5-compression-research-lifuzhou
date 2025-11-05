@@ -2,6 +2,8 @@
 
 root_path=/root/
 
+# 正式环境不要使用git clone, 下载指定release版本
+
 mkdir ${root_path}/plugins_source_code -p
 
 function install_depend() {
@@ -22,7 +24,7 @@ function install_vbz_compression() {
 	cd build
 	mkdir ${root_path}/third_lib_plugin -p
 	cmake .. -DCMAKE_INSTALL_PREFIX=${root_path}/third_lib_plugin
-	make IGNORE_TARGET=pyvbz -j8
+	make -j8 -k
 	#make install
 	cp bin/*.so ${root_path}/third_lib_plugin/
 }
@@ -40,8 +42,45 @@ function install_lz4() {
 	cp bin/*.so ${root_path}/third_lib_plugin/
 }
 
-install_depend
-install_vbz_compression
-install_lz4
+function install_zstd() {
+	cd ${root_path}/plugins_source_code
+	git clone https://github.com/facebook/zstd.git
+	cd zstd/
+	cd build/
+	cd cmake/
+	mkdir build
+	cd build/
+	cmake ..
+	make -j8
+	make install
 
+
+	cd ${root_path}/plugins_source_code
+	git clone https://github.com/HDFGroup/hdf5_plugins.git
+	cd hdf5_plugins
+	cd ZSTD
+	mkdir build -p
+	cd build
+	cmake .. -DZSTD_PACKAGE_NAME=zstd -DH5ZSTD_RESOURCES_DIR=/root/myhdfstuff/hdf5_plugins-hdf5-1.14.6/ZSTD/config/cmake
+	make -j8
+	cp bin/*.so ${root_path}/third_lib_plugin/
+}
+
+function install_blosc() {
+	cd ${root_path}/plugins_source_code
+	git clone https://github.com/Blosc/hdf5-blosc.git
+        cd hdf5-blosc/
+        mkdir build
+        cd build/
+        cmake ..
+        make -j8
+        make install
+	cp libblosc_filter.so  libH5Zblosc.so ${root_path}/third_lib_plugin/
+}
+
+#install_depend
+install_vbz_compression
+#install_lz4
+#install_zstd
+#install_blosc
 
