@@ -8,8 +8,8 @@ def print_graph(x, y1, y2):
     plt.figure(figsize=(10, 6))
 
     # 绘制多条折线
-    plt.plot(x, y1, label='cost', color='red', marker='s', linestyle='-')
-    plt.plot(x, y2, label='size', color='green', marker='^', linestyle='--')
+    plt.plot(x, y1, label='cost ms', color='red', marker='s', linestyle='-')
+    plt.plot(x, y2, label='size K', color='green', marker='^', linestyle='--')
 
     # 设置标题和标签
     plt.title('comparse', fontsize=15)

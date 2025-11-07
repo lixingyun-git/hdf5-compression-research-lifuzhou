@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 
         // 创建修改器实例
         HDF5CompressionModifier modifier(FLAGS_source_file, FLAGS_dest_file, FLAGS_verbose);
-        modifier.datasetLimit = 5; // 测试代码，正式发布不使用，所以没有添加命令行参数
+        //modifier.datasetLimit = 5; // 测试代码，正式发布不使用，所以没有添加命令行参数
 
         modifier.run(FLAGS_filter, FLAGS_compress_level);
 

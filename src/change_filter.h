@@ -93,7 +93,6 @@ private:
     {
         // 调用 H5Lexists 检查链接是否存在
         herr_t status = H5Lexists(fileId, groupPath.c_str(), H5P_DEFAULT);
-        cout << "isGroupExists status: " << status << endl;
         return (status == 1); // 存在返回 1，不存在返回 0
     }
     // 函数：通过文件句柄创建组（支持嵌套路径）

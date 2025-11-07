@@ -424,7 +424,6 @@ void HDF5CompressionModifier::SetNewFilter(hid_t plistId, const string& compress
 // 函数：通过文件句柄创建组（支持嵌套路径）
 hid_t HDF5CompressionModifier::createGroup(const hid_t fileId, const string& groupPath)
 {
-    cout << "createGroup groupPath: " << groupPath << endl;
     // 创建组：使用默认属性列表
     hid_t groupId = H5Gcreate(
         fileId,
