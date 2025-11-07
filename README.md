@@ -17,6 +17,12 @@ bash build_filter_plugin.sh
 
 cd ../src
 
+mkdir build
+
+cd build
+
+cmake ..
+
 make
 
 ### 执行数据操作
@@ -28,34 +34,35 @@ sh get_result.sh
 python get_graph.py
 
 ### 结果：
-filter NO_6 cost 12045ms file_size:697662K
+filter NO_6 cost 11560ms file_size:697662K
 
-filter GZIP_0 cost 4244ms file_size:699617K
+filter GZIP_0 cost 4039ms file_size:699617K
 
-filter GZIP_3 cost 26028ms file_size:300570K
+filter GZIP_3 cost 25664ms file_size:300570K
 
-filter GZIP_6 cost 51025ms file_size:290173K
+filter GZIP_6 cost 47825ms file_size:290173K
 
-filter GZIP_9 cost 79622ms file_size:280199K
+filter GZIP_9 cost 78527ms file_size:280199K
 
-filter ZSTD_0 cost 9750ms file_size:309599K
+filter ZSTD_0 cost 9642ms file_size:309599K
 
-filter ZSTD_3 cost 10389ms file_size:309599K
+filter ZSTD_3 cost 9759ms file_size:309599K
 
-filter ZSTD_6 cost 16554ms file_size:288921K
+filter ZSTD_6 cost 16193ms file_size:288921K
 
-filter ZSTD_9 cost 27044ms file_size:288882K
+filter ZSTD_9 cost 26728ms file_size:288882K
 
-filter VBZ_0 cost 4165ms file_size:699617K
+filter VBZ_0 cost 4133ms file_size:699617K
 
-filter VBZ_3 cost 27017ms file_size:300570K
+filter VBZ_3 cost 25439ms file_size:300570K
 
-filter VBZ_6 cost 49391ms file_size:290173K
+filter VBZ_6 cost 48003ms file_size:290173K
 
-filter VBZ_9 cost 82107ms file_size:280199K
+filter VBZ_9 cost 78060ms file_size:280199K
 
-filter LZ4_6 cost 5365ms file_size:500151K
+filter LZ4_6 cost 5270ms file_size:500151K
 
-<img width="1990" height="1320" alt="a554c982-72a5-4a18-a06d-6207dca122b7" src="https://github.com/user-attachments/assets/75170bd8-0fd0-42fd-8793-117ad5cc94e4" />
+<img width="2000" height="1328" alt="8c68e5526c9b439c08b756edc689bdf2" src="https://github.com/user-attachments/assets/333d1c65-a4b5-402c-989a-d55b9c96a737" />
+
 
 需要有一种方式最终校验数据正确性
