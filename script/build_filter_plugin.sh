@@ -12,6 +12,7 @@ function install_depend() {
 	apt install -y cmake
 	apt install -y libhdf5-dev
 	apt install -y build-essential autoconf automake libtool pkg-config
+	apt install -y libgflags-dev libgtest-dev
 	pip install conan==1.60
 }
 
@@ -25,7 +26,7 @@ function install_vbz_compression() {
 	mkdir ${root_path}/third_lib_plugin -p
 	cmake .. -DCMAKE_INSTALL_PREFIX=${root_path}/third_lib_plugin
 	make -j8 -k
-	#make install
+	make install
 	cp bin/*.so ${root_path}/third_lib_plugin/
 }
 
@@ -78,9 +79,9 @@ function install_blosc() {
 	cp libblosc_filter.so  libH5Zblosc.so ${root_path}/third_lib_plugin/
 }
 
-#install_depend
+install_depend
 install_vbz_compression
-#install_lz4
-#install_zstd
-#install_blosc
+install_lz4
+install_zstd
+install_blosc
 
