@@ -10,7 +10,9 @@ set(CMAKE_BUILD_TYPE Debug)
 
 # 添加一个静态库目标
 add_library(change_filter STATIC change_filter.cpp)
-target_link_libraries(change_filter hdf5 hdf5_cpp)
+#target_link_libraries(change_filter hdf5 hdf5_cpp)
+target_link_libraries(change_filter debug hdf5_debug optimized hdf5)
+target_link_libraries(change_filter debug hdf5_cpp_debug optimized hdf5_cpp)
 
 add_executable(main new_main.cpp)
 target_link_libraries(main gflags change_filter)
