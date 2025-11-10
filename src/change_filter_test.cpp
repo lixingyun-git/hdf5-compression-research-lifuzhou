@@ -20,6 +20,7 @@ public:
     }
 
     bool exploreFileStructure(HDF5CompressionModifier &modifier, bool construct_error) {
+	modifier.openFile();
         if (construct_error) {
             modifier.inputFileId = H5I_INVALID_HID;
         }
@@ -28,6 +29,7 @@ public:
     }
 
     bool readHdf5Data(HDF5CompressionModifier &modifier, bool construct_error, const string& datasetPath) {
+	modifier.openFile();
         if (construct_error) {
             modifier.inputFileId = H5I_INVALID_HID;
         }

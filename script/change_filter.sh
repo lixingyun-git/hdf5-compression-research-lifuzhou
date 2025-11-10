@@ -2,7 +2,7 @@
 
 export HDF5_PLUGIN_PATH=/root/third_lib_plugin/
 
-root_src_path=`readlink -f ../src_cpp`
+root_src_path=`readlink -f ../src`
 
 cmd='${root_src_path}/build/main --source_file=${root_src_path}/../../hdf5-compression-bench/PBG08621_pass_6c7986d6_167483a9_0.hdf5 --filter=NO --dest_file=NO_compression.hdf5'
 echo cmd ${cmd}
